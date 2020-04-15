@@ -57,6 +57,7 @@ const int gameScreenHeight = 32;
 
 /*------------------------------------- Function headers -------------------------------*/
 void generate_sin(short audio_samples[], int samples_length, int samplerate, float frequency);
+void generate_hihat(short audio_samples[], int samples_length);
 Color highlightColor(Color input, int i);
 Color lowlightColor(Color input, int i);
 int find_max(int a[], int n);
@@ -81,8 +82,42 @@ int main(void)
     int samplerate = 22050;
     InitAudioDevice();
     AudioStream stream = InitAudioStream(samplerate, 16, 1);
-    float frequencies[] = {
-        261.63,	//C4
+    float frequencies[4][16] = {
+        {41.20, // E1
+        43.65, // F1
+        46.25, // F#1
+        49.00, // G1
+        51.91, // G#1 
+        55.00, // A1
+        58.27, // A#1
+        61.74, // B1
+        65.41, // C2
+        69.30, // C#2
+        73.42, // D2
+        77.78, // D#2
+        82.41, // E2
+        87.31, // F2
+        92.50, // F#2
+        98.00}, //	G2
+
+        {103.83, //	G#2
+        110.00, //	A2
+        116.54, //	A#2
+        123.47, //	B2
+        130.81, //	C3
+        138.59, //	C#3
+        146.83, //	D3
+        155.56, //	D#3
+        164.81, //	E3
+        174.61, //	F3
+        185.00, //	F#3
+        196.00, //	G3
+        207.65, //	G#3
+        220.00, //	A3
+        233.08, //	A#3
+        246.94 }, //B3
+
+        {261.63,//C4
         277.18,	//C#4
         293.66,	//D4
         311.13,	//D#4
@@ -97,12 +132,33 @@ int main(void)
         523.25,	//C5
         554.37,	//C#5
         587.33,	//D5
-        622.25	//D#5
+        622.25},//D#5
+
+        {659.25,//	E5
+        698.46,	//  F5
+        739.99,	//	F#5
+        783.99,	//	G5
+        830.61,	//	G#5 
+        880.00,	//	A5
+        932.33,	//	A#5
+        987.77,	//	B5
+        1046.50, //	C6
+        1108.73, //	C#6
+        1174.66, //	D6
+        1244.51, //	D#6
+        1318.51, //	E6
+        1396.91, //	F6
+        1479.98, //	F#6 
+        1567.98} //	G6
+
     };
+
+    int selector1 = 0;
+    int selector2 = 0;
     #define zRows 4
     #define zCols 4
-    int Yoffset = 4;
     #define numberZones  zRows* zCols
+    int Yoffset = 4;
     int zWidth = gameScreenWidth / zCols;
     int zHeight = (gameScreenHeight- Yoffset/ zRows) / zRows;
     int timers[numberZones] = { 0 };
@@ -115,13 +171,14 @@ int main(void)
     {
         for (int j = 0; j < zCols; j++)
         {
-            zColors[n] = (Color){ GetRandomValue(0, 255), GetRandomValue(0, 255), GetRandomValue(0, 255),255 };
+            zColors[n] = (Color){ GetRandomValue(0, 255),  GetRandomValue(0, 255), GetRandomValue(0, 255), 255 };
             zones[n] = (Rectangle){ j * zWidth, i * zHeight + Yoffset, zWidth, zHeight };
             n++;
         }
     }
 
-
+    Color colorGUI = { 0, 153, 255, 255 };
+    Color colorGUI2 = { 255, 0, 102, 255 };
     // ------------ end of YOUR CODE ------------------
 
     SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
@@ -152,7 +209,7 @@ int main(void)
                 int y = (int)GetMouseY()/scale;
                 Color temp;
              
-
+                // Detect if clicked zones
                 for (int i = 0; i < numberZones; i++)
                 {
                     if ((x > zones[i].x) && (x < (zones[i].x + zones[i].width)) && (y > zones[i].y) && (y < (zones[i].y + zones[i].height)))
@@ -160,38 +217,68 @@ int main(void)
                         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
                         {
                             timers[i] = 10;
-                           // TraceLog(LOG_INFO, FormatText(" timers[%d]=%d,", i, timers[i]));
                         }
                     }
                 }
+                // Detect if clicked Selector
+                if ((x >= 1) && (x <= 9) && (y >= 1) && (y <= 2) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+                {
+                    selector1++;
 
-                int max=find_max(timers, numberZones);
+                    if (selector1 == 4)
+                    {
+                        selector1 = 0;
+                    }
+                }
+                if ((x >= 12) && (x <= 19) && (y >= 1) && (y <= 2) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+                {
+                    selector2++;
+
+                    if (selector2 == 3)
+                    {
+                        selector2 = 0;
+                    }
+                }
+
+
+                // Draw zones 
                 for (int i = 0; i < numberZones; i++)
                 {
                     temp = zColors[i];
-    
-                    if (max > 0)
+
+                    if (timers[i] > 0)
                     {
-            
-                        if (timers[i] > 0)
+                        temp = highlightColor(zColors[i], timers[i]);
+                        if (timers[i] == 10)
                         {
-                            temp = highlightColor(zColors[i], timers[i]);
-                            if (timers[i] == 10)
+                            short audio_samples[MAX_SAMPLES] = { 0 };
+
+                             generate_sin(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][i]);
+
+                            if (IsAudioStreamPlaying(stream))
                             {
-                                short audio_samples[MAX_SAMPLES] = { 0 };
-                                generate_sin(audio_samples, MAX_SAMPLES, samplerate, frequencies[i]);
-                                UpdateAudioStream(stream, audio_samples, MAX_SAMPLES);
-                                PlayAudioStream(stream);
+                                StopAudioStream(stream);
                             }
+                            UpdateAudioStream(stream, audio_samples, MAX_SAMPLES);
+                            PlayAudioStream(stream);
+                         }
 
-                            timers[i] -= 1;
-                        }
-
-
+                        timers[i] -= 1;
                     }
-                    
+   
                     DrawRectangle(zones[i].x, zones[i].y, zones[i].width, zones[i].height, temp);
+       
+
                 }
+
+
+                DrawPixel(1, 1, colorGUI);
+                DrawLine(1, 2, 10, 2, colorGUI);
+                DrawLine(2 + 2 * selector1, 1, 4 + 2 * selector1, 1, colorGUI2);
+
+                DrawPixel(12, 1, colorGUI);
+                DrawLine(12, 2, 19, 2, colorGUI);
+                DrawLine(13 + 2 * selector2, 1, 15 + 2 * selector2, 1, colorGUI2);
 
      
                 // ------------ end of YOUR CODE ------------------
@@ -213,9 +300,8 @@ int main(void)
     // De-Initialization
     //--------------------------------------------------------------------------------------
     UnloadRenderTexture(target);    // Unload render texture
-    CloseAudioStream(stream);   // Close raw audio stream and delete buffers from RAM
-    CloseAudioDevice();         // Close audio device (music streaming is automatically stopped)
-
+    CloseAudioStream(stream);       // Close raw audio stream and delete buffers from RAM
+    CloseAudioDevice();             // Close audio device (music streaming is automatically stopped)
     CloseWindow();                  // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
     return 0;
@@ -229,7 +315,7 @@ int main(void)
 Color highlightColor(Color input, int i)
 {
     int r, g, b;
-    int offset = i*8;
+    int offset = i * 8;
     Color output;
 
     r = input.r + offset;
@@ -306,6 +392,24 @@ void generate_sin(short audio_samples[], int samples_length, int samplerate, flo
         int amplitude = 32000 - 8 * i;
 
         audio_samples[i] = (short)(sinf(((2 * PI * (float)i / waveLength))) * amplitude);
+    }
+    return;
+}
+
+
+/*--------------------------------------------------------------------------------------*/
+/*                                                                                      */
+/* Function: generate_hihat()                                                           */
+/*                                                                                      */
+/*--------------------------------------------------------------------------------------*/
+void generate_hihat(short audio_samples[], int samples_length)
+{
+ 
+    for (int i = 0; i < samples_length; i++)
+    {
+        int amplitude = abs(3200 - 10 * i);
+
+        audio_samples[i] = amplitude * GetRandomValue(0,100);
     }
     return;
 }
