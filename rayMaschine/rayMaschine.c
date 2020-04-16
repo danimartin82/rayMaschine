@@ -68,7 +68,87 @@ float frequencies[4][16] =
 
 */
 
-int selector1 = 0;
+int melody[70][2] = {
+{1,14},
+{1,13},
+{1,14},
+{1,13},
+{1,14},
+{1,9},
+{1,12},
+{1,10},
+{3,7},
+{1,10},
+{1,2},
+{1,7},
+{3,9},
+{1,2},
+{1,6},
+{1,9},
+{3,10},
+{1,2},
+{1,14},
+{1,13},
+{1,14},
+{1,13},
+{1,14},
+{1,9},
+{1,12},
+{1,10},
+{3,7},
+{1,10},
+{1,2},
+{1,7},
+{1,9},
+{1,2},
+{1,6},
+{1,12},
+{1,10},
+{1,9},
+{3,7},
+{1,9},
+{1,10},
+{1,12},
+{3,14},
+{1,5},
+{1,15},
+{1,14},
+{3,12},
+{1,3},
+{1,14},
+{1,12},
+{3,10},
+{1,2},
+{1,12},
+{1,10},
+{2,9},
+{1,7},
+{1,2},
+{3,14},
+{1,14},
+{3,14},
+{1,13},
+{3,14},
+{1,13},
+{1,14},
+{1,13},
+{1,14},
+{1,13},
+{1,14},
+{1,9},
+{1,12},
+{1,10},
+{4,7}
+};
+
+int t = 0;
+int actual_note=100;
+int samplerate = 22050;
+AudioStream stream;
+
+
+
+int selector1 = 2;
 int selector2 = 0;
 #define zRows 4
 #define zCols 4
@@ -80,19 +160,18 @@ Rectangle zones[numberZones];
 Color colorGUI = { 0, 153, 255, 255 };
 Color colorGUI2 = { 255, 0, 102, 255 };
 
-int samplerate = 22050;
-AudioStream stream;
 
 /*------------------------------------- Function headers -------------------------------*/
 void detect_user_interaction(void);
-void draw_user_interaction(void);
+void draw_zones(void);
 void play_user_interaction(void);
+void play_melody(void);
 void draw_GUI(void);
 void generate_sin(short audio_samples[], int samples_length, int samplerate, float frequency);
 void generate_square(short audio_samples[], int samples_length, int samplerate, float frequency);
 void generate_hihat(short audio_samples[], int samples_length);
-Color highlightColor(Color input, int i);
-Color lowlightColor(Color input, int i);
+Color highlightUser(Color input, int i);
+Color highlightGame(Color input);
 int find_max(int a[], int n);
 
 
@@ -159,8 +238,11 @@ int main(void)
 
 
                 detect_user_interaction();
-                draw_user_interaction();
+                draw_zones();
                 play_user_interaction();
+
+                play_melody();
+
 
                 draw_GUI();
 
@@ -192,7 +274,49 @@ int main(void)
 }
 
 
+/*--------------------------------------------------------------------------------------*/
+/*                                                                                      */
+/* Function: play_melody()                                                              */
+/*                                                                                      */
+/*--------------------------------------------------------------------------------------*/
+void play_melody(void)
+{
+    short audio_samples[MAX_SAMPLES] = { 0 };
 
+  
+    if ((actual_note < 70) && (t == 0))
+    {
+        if (selector2 == 0)
+        {
+            generate_sin(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][melody[actual_note][1]]);
+        }
+        else
+        {
+            generate_square(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][melody[actual_note][1]]);
+        }
+        if (IsAudioStreamPlaying(stream))
+        {
+            StopAudioStream(stream);
+        }
+        UpdateAudioStream(stream, audio_samples, MAX_SAMPLES);
+        PlayAudioStream(stream);
+
+    }
+    if ((t / 10 == melody[actual_note][0]))
+    {       
+        actual_note++;
+        t = 0;
+     }
+    else
+    {
+        t++;
+
+    }
+
+    
+
+    return;
+}
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
@@ -208,6 +332,12 @@ void draw_GUI(void)
     DrawPixel(12, 1, colorGUI);
     DrawLine(12, 2, 19, 2, colorGUI);
     DrawLine(13 + 2 * selector2, 1, 15 + 2 * selector2, 1, colorGUI2);
+
+    DrawPixel(25, 1, colorGUI);
+    DrawPixel(26, 1, colorGUI2);
+    DrawPixel(27, 1, colorGUI);
+    DrawLine(25,2,28,2,colorGUI);
+
     return;
 }
 
@@ -255,15 +385,22 @@ void detect_user_interaction(void)
             selector2 = 0;
         }
     }
+
+    if ((x >= 25) && (x <= 28) && (y >= 1) && (y <= 2) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    {
+        t = 0;
+        actual_note = 0;
+    }
+
     return;
 }
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
-/* Function: draw_user_interaction()                                                    */
+/* Function: draw_zones()                                                               */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-void draw_user_interaction(void)
+void draw_zones(void)
 {
     Color temp;
     for (int i = 0; i < numberZones; i++)
@@ -272,7 +409,12 @@ void draw_user_interaction(void)
 
         if (timers[i] > 0)
         {
-            temp = highlightColor(zColors[i], timers[i]);     
+            temp = highlightUser(zColors[i], timers[i]);
+        }
+
+        if (i == melody[actual_note][1])
+        {
+            temp = highlightGame(zColors[i]);
         }
 
         DrawRectangle(zones[i].x, zones[i].y, zones[i].width, zones[i].height, temp);
@@ -326,10 +468,10 @@ void play_user_interaction(void)
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
-/* Function: highlightColor()                                                           */
+/* Function: highlightUser()                                                           */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-Color highlightColor(Color input, int i)
+Color highlightUser(Color input, int i)
 {
     int r, g, b;
     int offset = i * 8;
@@ -348,24 +490,16 @@ Color highlightColor(Color input, int i)
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
-/* Function: lowlightColor()                                                            */
+/* Function: highlightGame()                                                            */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-Color lowlightColor(Color input, int i)
+Color highlightGame(Color input)
 {
-    int r, g, b;
-    int offset = i*4;
     Color output;
 
-    r = input.r - offset;
-    g = input.g - offset;
-    b = input.b - offset;
-    if (r < 0) { output.r = 0; }
-    else { output.r = r; }
-    if (g < 0) { output.g = 0; }
-    else { output.g = g; }
-    if (b < 0) { output.b = 0; }
-    else { output.b = b; }
+    output.r = 255;
+    output.g = 0;
+    output.b = 0;
     output.a = 255;
 
     return output;
