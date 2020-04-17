@@ -70,10 +70,23 @@ float frequencies[4][16] =
 int samplerate = 22050;
 AudioStream stream;
 
-int gameMelody[70][2] = {
-{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{3,7},{1,2},{1,2},{1,7},{3,9},{1,2},{1,6},{1,9},{3,10},{1,2},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},
+#define NUMBER_OF_LEVELS 2
+#define MELODY_1_LENGTH 3
+#define MELODY_2_LENGTH 70
+
+int MELODY_1[MELODY_1_LENGTH][2] =
+{ {1,3},{1,7},{1,9} };
+
+
+int MELODY_2[MELODY_2_LENGTH][2]={ {1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{3,7},{1,2},{1,2},{1,7},{3,9},{1,2},{1,6},{1,9},{3,10},{1,2},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},
 {1,10},{3,7},{1,2},{1,2},{1,7},{1,9},{1,2},{1,6},{1,12},{1,10},{1,9},{3,7},{1,9},{1,10},{1,12},{3,14},{1,5},{1,15},{1,14},{3,12},{1,3},{1,14},{1,12},{3,10},{1,2},
-{1,12},{1,10},{2,9},{1,7},{1,2},{3,14},{1,14},{3,14},{1,13},{3,14},{1,13},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{4,7}};
+{1,12},{1,10},{2,9},{1,7},{1,2},{3,14},{1,14},{3,14},{1,13},{3,14},{1,13},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{4,7} };
+
+int gameMelodyLengths[] = {MELODY_1_LENGTH, MELODY_2_LENGTH};
+
+int gameMelody[70][2] = { 0 };
+
+int gameLevel = 0;
 
 int userMelody[70] = { 0 };
 
@@ -84,23 +97,24 @@ int gameMaxNote = 0;
 int userActualNote = 0;
 
 bool userDrawingDone = false;
-bool levelCompleted = false;
+bool phaseCompleted = false;
 
 enum gameStatus{
     GAME_FREE_MODE,
     GAME_START_SCREEN,
     GAME_PLAYING,
-    GAME_LOOSE_SCREEN
+    GAME_LOOSE_SCREEN,
+    GAME_WIN_SCREEN,
 } gameStatus;
 
-enum levelStatus {
-    LEVEL_START,
-    LEVEL_MELODY_START,
-    LEVEL_MELODY_PLAYING,
-    LEVEL_MELODY_STOP,
-    LEVEL_USER_PLAYING,
-    LEVEL_DONE,
-}; levelStatus;
+enum phaseStatus {
+    PHASE_START,
+    PHASE_MELODY_START,
+    PHASE_MELODY_PLAYING,
+    PHASE_MELODY_STOP,
+    PHASE_USER_PLAYING,
+    PHASE_DONE,
+}; phaseStatus;
 
 
 #define TIMER_HIGHLIGHT_GAME 10
@@ -234,9 +248,9 @@ void initGame(void)
     }
 
     gameStatus = GAME_FREE_MODE;
-    levelStatus = LEVEL_START;
+    phaseStatus = PHASE_START;
     TraceLog(LOG_INFO, "gameStatus = GAME_FREE_MODE");
-    TraceLog(LOG_INFO, "levelStatus = LEVEL_START");
+    TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
 
     return;
 }
@@ -252,6 +266,7 @@ void gameFSM(void)
     {
         case GAME_FREE_MODE:
         {
+            screenTimer = 0;
             drawGame();
             detectUserInteraction();
             playUserInteraction();
@@ -261,14 +276,30 @@ void gameFSM(void)
         case GAME_START_SCREEN:
         {
             screenTimer++;
-            DrawTextEx(GetFontDefault(), "GO!!", (Vector2) { 0, 13 }, 10, 1, colorGUI2);
+            DrawTextEx(GetFontDefault(), "GO!!", (Vector2) { 0, 0 }, 10, 1, colorGUI2);
+            DrawTextEx(GetFontDefault(), FormatText("Level%d",gameLevel), (Vector2) { 0, 10 }, 10, 1, colorGUI2);
+
             if (screenTimer > TIMER_START_SCREEN)
             {
+                switch (gameLevel)
+                {
+                    case 0:
+                    {
+                        memcpy(&gameMelody[0][0], MELODY_1, gameMelodyLengths[gameLevel] * 2 * sizeof(int));
+                    }
+                    break;
+                    case 1:
+                    {
+                        memcpy(&gameMelody[0][0], MELODY_2, gameMelodyLengths[gameLevel] * 2 * sizeof(int));
+                    }
+                    break;
+                }
+                
                 screenTimer = 0;
                 gameStatus = GAME_PLAYING;
-                levelStatus = LEVEL_START;
+                phaseStatus = PHASE_START;
                 TraceLog(LOG_INFO, "gameStatus = GAME_PLAYING");
-                TraceLog(LOG_INFO, "levelStatus = LEVEL_START");
+                TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
             }
         }
         break;
@@ -286,7 +317,7 @@ void gameFSM(void)
         {
             screenTimer++;
 
-            DrawTextEx(GetFontDefault(), "YOUR", (Vector2) { 0, 0 }, 10, 1, colorGUI2);
+            DrawTextEx(GetFontDefault(), "LOOSE", (Vector2) { 0, 0 }, 10, 1, colorGUI2);
             DrawTextEx(GetFontDefault(), "SCORE", (Vector2) { 0, 10 }, 10, 1, colorGUI2);
             DrawTextEx(GetFontDefault(), FormatText("%d", gameMaxNote), (Vector2) { 0, 20 }, 10, 1, colorGUI2);
 
@@ -294,9 +325,37 @@ void gameFSM(void)
             {
                 screenTimer = 0;
                 gameStatus = GAME_FREE_MODE;
-                levelStatus = LEVEL_START;
+                phaseStatus = PHASE_START;
                 TraceLog(LOG_INFO, "gameStatus = GAME_FREE_MODE");
-                TraceLog(LOG_INFO, "levelStatus = LEVEL_START");
+                TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
+            }
+
+        }
+        break;
+
+        case GAME_WIN_SCREEN:
+        {
+            screenTimer++;
+
+            DrawTextEx(GetFontDefault(), "WIN!!", (Vector2) { 0, 0 }, 10, 1, colorGUI);
+            DrawTextEx(GetFontDefault(), "SCORE", (Vector2) { 0, 10 }, 10, 1, colorGUI);
+            DrawTextEx(GetFontDefault(), FormatText("%d", gameMaxNote + 1), (Vector2) { 0, 20 }, 10, 1, colorGUI);
+
+            if (screenTimer > TIMER_LOOSE_SCREEN)
+            {
+                screenTimer = 0;
+                if (gameLevel<NUMBER_OF_LEVELS)
+                {
+                    gameLevel++;
+                }
+                else
+                {
+                    gameLevel = 0;
+                }
+                gameStatus = GAME_FREE_MODE;
+                phaseStatus = PHASE_START;
+                TraceLog(LOG_INFO, "gameStatus = GAME_FREE_MODE");
+                TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
             }
 
         }
@@ -313,25 +372,25 @@ void levelFSM(void)
 {
     short audio_samples[MAX_SAMPLES] = { 0 };
 
-    switch (levelStatus)
+    switch (phaseStatus)
     {
-        case LEVEL_START:
+        case PHASE_START:
         {
             gameMaxNote = 0;
-            levelStatus = LEVEL_MELODY_START;
-            TraceLog(LOG_INFO, "levelStatus = LEVEL_MELODY_START");
+            phaseStatus = PHASE_MELODY_START;
+            TraceLog(LOG_INFO, "phaseStatus = PHASE_MELODY_START");
         }
         break;
-        case LEVEL_MELODY_START:
+        case PHASE_MELODY_START:
         {
             audioTimer = 0;
             gameActualNote = 0;
-            levelStatus = LEVEL_MELODY_PLAYING;
-            TraceLog(LOG_INFO, "levelStatus = LEVEL_MELODY_PLAYING");
+            phaseStatus = PHASE_MELODY_PLAYING;
+            TraceLog(LOG_INFO, "phaseStatus = PHASE_MELODY_PLAYING");
         }
         break;
 
-        case LEVEL_MELODY_PLAYING:
+        case PHASE_MELODY_PLAYING:
         {
 
             if (audioTimer == 0)
@@ -344,8 +403,8 @@ void levelFSM(void)
                 audioTimer = 0;
                 if (gameActualNote == gameMaxNote)
                 {
-                    levelStatus = LEVEL_MELODY_STOP;
-                    TraceLog(LOG_INFO, "levelStatus = LEVEL_MELODY_STOP");
+                    phaseStatus = PHASE_MELODY_STOP;
+                    TraceLog(LOG_INFO, "phaseStatus = PHASE_MELODY_STOP");
                 }
                 else
                 {
@@ -362,15 +421,15 @@ void levelFSM(void)
             }
          }
         break;
-        case LEVEL_MELODY_STOP:
+        case PHASE_MELODY_STOP:
         {
             userActualNote = 0;
             memset(userMelody, 0, sizeof(userMelody));
-            levelStatus = LEVEL_USER_PLAYING;
-            TraceLog(LOG_INFO, "levelStatus = LEVEL_USER_PLAYING");
+            phaseStatus = PHASE_USER_PLAYING;
+            TraceLog(LOG_INFO, "phaseStatus = PHASE_USER_PLAYING");
         }
         break;
-        case LEVEL_USER_PLAYING:
+        case PHASE_USER_PLAYING:
         {
             bool mistake = false;
             for (int i = 0; i < userActualNote; i++)
@@ -387,38 +446,46 @@ void levelFSM(void)
             {
                 if (userActualNote > gameMaxNote)
                 {
-                    levelCompleted = true;
-                    levelStatus = LEVEL_DONE;
-                    TraceLog(LOG_INFO, "levelStatus = LEVEL_DONE a");   
+                    phaseCompleted = true;
+                    phaseStatus = PHASE_DONE;
+                    TraceLog(LOG_INFO, "phaseStatus = PHASE_DONE phaseCompleted=true");   
                 }
                
             }
             else
             {
-                levelCompleted = false;
-                levelStatus = LEVEL_DONE;
-                TraceLog(LOG_INFO, "levelStatus = LEVEL_DONE b");
+                phaseCompleted = false;
+                phaseStatus = PHASE_DONE;
+                TraceLog(LOG_INFO, "phaseStatus = PHASE_DONE phaseCompleted=false");
             }
         }
         break;
 
-        case LEVEL_DONE:
+        case PHASE_DONE:
         {
             if (userDrawingDone == true)
             {
                 wait(1);
                 userDrawingDone = false;
-                if (levelCompleted == true)
+                if (phaseCompleted == true)
                 {
-                    levelCompleted = false;
-                    gameMaxNote++;
-                    levelStatus = LEVEL_MELODY_START;
-                    TraceLog(LOG_INFO, "levelStatus = LEVEL_MELODY_START level up!!");
+                    phaseCompleted = false;
+                    if ( gameMelodyLengths[gameLevel] - gameMaxNote > 1)
+                    {
+                        gameMaxNote++;
+                        phaseStatus = PHASE_MELODY_START;
+                        TraceLog(LOG_INFO, FormatText("phaseStatus = PHASE_MELODY_START level up gameMaxNote=%d, gameMelody1Length=%d!!", gameMaxNote, gameMelodyLengths[gameLevel]));
+                    }
+                    else
+                    {                      
+                        gameStatus = GAME_WIN_SCREEN;
+                        TraceLog(LOG_INFO, "gameStatus = GAME_WIN_SCREEN");
+                    }
                 }
                 else
                 {
-                    levelStatus = LEVEL_START;
-                    TraceLog(LOG_INFO, "levelStatus = LEVEL_START");
+                    phaseStatus = PHASE_START;
+                    TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
                     gameStatus = GAME_LOOSE_SCREEN;
                     TraceLog(LOG_INFO, "gameStatus = GAME_LOOSE_SCREEN");
                 }
@@ -454,7 +521,7 @@ void detectUserInteraction(void)
                 userDrawingDone = false;
                 timersUser[i] = TIMER_HIGHLIGHT_USER;
 
-                if (levelStatus == LEVEL_USER_PLAYING)
+                if (phaseStatus == PHASE_USER_PLAYING)
                 {
                     userMelody[userActualNote] = i;
                     userActualNote++;
@@ -477,7 +544,7 @@ void detectUserInteraction(void)
     {
         selector2++;
 
-        if (selector2 == 3)
+        if (selector2 == 2)
         {
             selector2 = 0;
         }
@@ -624,7 +691,7 @@ void drawGame(void)
     DrawLine(2 + 2 * selector1, 1, 4 + 2 * selector1, 1, colorGUI2);
 
     DrawPixel(12, 1, colorGUI);
-    DrawLine(12, 2, 19, 2, colorGUI);
+    DrawLine(12, 2, 17, 2, colorGUI);
     DrawLine(13 + 2 * selector2, 1, 15 + 2 * selector2, 1, colorGUI2);
 
     DrawPixel(25, 1, colorGUI);
@@ -685,9 +752,13 @@ void wait(int seconds)
 {
     double a = GetTime();
     double b = GetTime();
+ 
+    TraceLog(LOG_INFO, FormatText("Wait %d [s]",seconds));
     while (b < a + seconds)
     {
         b = GetTime();
     }
+
+
     return;
 }
