@@ -67,86 +67,30 @@ float frequencies[4][16] =
          E5,  F5, F#5,  G5, G#5,  A5, A#5,  B5,  C6, C#6,  D6, D#6,  E6,  F6, F#6,  G6
 
 */
-
-int melody[70][2] = {
-{1,14},
-{1,13},
-{1,14},
-{1,13},
-{1,14},
-{1,9},
-{1,12},
-{1,10},
-{3,7},
-{1,10},
-{1,2},
-{1,7},
-{3,9},
-{1,2},
-{1,6},
-{1,9},
-{3,10},
-{1,2},
-{1,14},
-{1,13},
-{1,14},
-{1,13},
-{1,14},
-{1,9},
-{1,12},
-{1,10},
-{3,7},
-{1,10},
-{1,2},
-{1,7},
-{1,9},
-{1,2},
-{1,6},
-{1,12},
-{1,10},
-{1,9},
-{3,7},
-{1,9},
-{1,10},
-{1,12},
-{3,14},
-{1,5},
-{1,15},
-{1,14},
-{3,12},
-{1,3},
-{1,14},
-{1,12},
-{3,10},
-{1,2},
-{1,12},
-{1,10},
-{2,9},
-{1,7},
-{1,2},
-{3,14},
-{1,14},
-{3,14},
-{1,13},
-{3,14},
-{1,13},
-{1,14},
-{1,13},
-{1,14},
-{1,13},
-{1,14},
-{1,9},
-{1,12},
-{1,10},
-{4,7}
-};
-
-int t = 0;
-int actual_note=100;
 int samplerate = 22050;
 AudioStream stream;
 
+int gameMelody[70][2] = {
+{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{3,7},{1,2},{1,2},{1,7},{3,9},{1,2},{1,6},{1,9},{3,10},{1,2},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},
+{1,10},{3,7},{1,2},{1,2},{1,7},{1,9},{1,2},{1,6},{1,12},{1,10},{1,9},{3,7},{1,9},{1,10},{1,12},{3,14},{1,5},{1,15},{1,14},{3,12},{1,3},{1,14},{1,12},{3,10},{1,2},
+{1,12},{1,10},{2,9},{1,7},{1,2},{3,14},{1,14},{3,14},{1,13},{3,14},{1,13},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{4,7}};
 
+int userMelody[70] = { 0 };
+
+int audioTimer = 0;
+int gameActualNote = 100;
+int gameMaxNote = 0;
+int userActualNote = 0;
+bool gameInterpretationDone = false;
+bool userDrawingDone = false;
+
+enum gameStatus{START,FREE_MODE,PLAYING,LOOSE} gameStatus;
+enum userStatus { USER_NOT_STARTED, USER_PLAYING, USER_LEVEL_DONE,USER_FAILED} userStatus;
+
+gameStatus = FREE_MODE;
+userStatus = USER_NOT_STARTED;
+
+#define TIMER_HIGHLIGHT_GAME 10
 
 int selector1 = 2;
 int selector2 = 0;
@@ -154,7 +98,9 @@ int selector2 = 0;
 #define zCols 4
 #define numberZones  zRows* zCols
 int Yoffset = 4;
-int timers[numberZones] = { 0 };
+int timersUser[numberZones] = { 0 };
+int timersGame[numberZones] = { 0 };
+
 Color zColors[numberZones];
 Rectangle zones[numberZones];
 Color colorGUI = { 0, 153, 255, 255 };
@@ -162,17 +108,19 @@ Color colorGUI2 = { 255, 0, 102, 255 };
 
 
 /*------------------------------------- Function headers -------------------------------*/
-void detect_user_interaction(void);
-void draw_zones(void);
-void play_user_interaction(void);
-void play_melody(void);
-void draw_GUI(void);
-void generate_sin(short audio_samples[], int samples_length, int samplerate, float frequency);
-void generate_square(short audio_samples[], int samples_length, int samplerate, float frequency);
-void generate_hihat(short audio_samples[], int samples_length);
+void detectUserInteraction(void);
+void checkUserFollowingMelody(int note);
+void drawZones(void);
+void playUserInteraction(void);
+void playMelody(void);
+void drawGUI(void);
+void wait(int seconds);
+void generateSin(short audio_samples[], int samples_length, int samplerate, float frequency);
+void generateSquare(short audio_samples[], int samples_length, int samplerate, float frequency);
+void generateNoise(short audio_samples[], int samples_length);
 Color highlightUser(Color input, int i);
-Color highlightGame(Color input);
-int find_max(int a[], int n);
+Color highlightGame(Color input, int i);
+void userStatusFSM(void);
 
 
 /*--------------------------------------------------------------------------------------*/
@@ -208,8 +156,8 @@ int main(void)
             n++;
         }
     }
-
-
+    TraceLog(LOG_INFO, "userStatus = USER_NOT_STARTED");
+    TraceLog(LOG_INFO, "gameStatus = FREE_MODE");
     // ------------ end of YOUR CODE ------------------
 
     SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
@@ -236,17 +184,48 @@ int main(void)
                 // ------------ YOUR CODE here -------------
                 //TraceLog(LOG_INFO, FormatText("%d,%d", x, y));
 
+                switch (gameStatus)
+                {
+                    case FREE_MODE:
+                    {
+                        detectUserInteraction();
+                        drawZones();
+                        drawGUI();
+                        playUserInteraction();
+                    }
+                    break;
 
-                detect_user_interaction();
-                draw_zones();
-                play_user_interaction();
+                    case START:
+                    {
+                        audioTimer = 0;
+                        gameActualNote = 0;
+                        gameInterpretationDone = false;
+                        userActualNote = 0;
+                        memset(userMelody, 0, sizeof(userMelody));
 
-                play_melody();
+                        gameStatus = PLAYING;
+                        TraceLog(LOG_INFO, "gameStatus = PLAYING");
+                    }
+                    break;
 
+                    case PLAYING:
+                    {
+                        detectUserInteraction();
+                        drawZones();
+                        drawGUI();
+                        playUserInteraction();
+                        playMelody();
+                        userStatusFSM();
+                    }
+                    break;
 
-                draw_GUI();
-
-     
+                    case LOOSE:
+                    {
+                        DrawRectangle(0, 0, 32, 32, (Color) { 0, 0, 0, 255 });
+                      
+                    }
+                    break;
+                }
                 // ------------ end of YOUR CODE ------------------
 
             EndTextureMode();
@@ -276,43 +255,60 @@ int main(void)
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
-/* Function: play_melody()                                                              */
+/* Function: playMelody()                                                              */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-void play_melody(void)
+void playMelody(void)
 {
     short audio_samples[MAX_SAMPLES] = { 0 };
 
-  
-    if ((actual_note < 70) && (t == 0))
-    {
-        if (selector2 == 0)
+    if ((gameActualNote <= gameMaxNote) && (gameInterpretationDone != true))
+    {       
+
+        if (audioTimer == 0)
         {
-            generate_sin(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][melody[actual_note][1]]);
+            timersGame[gameMelody[gameActualNote][1]] = TIMER_HIGHLIGHT_GAME;
+            //TraceLog(LOG_INFO, FormatText(" gameActualNote=%d, gameMaxNote=%d, timersGame[%d][1]] %d", gameActualNote, gameMaxNote, gameMelody[gameActualNote][1], timersGame[gameMelody[gameActualNote][1]]));
+            if (selector2 == 0)
+            {
+                generateSin(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][gameMelody[gameActualNote][1]]);
+            }
+            else
+            {
+                generateSquare(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][gameMelody[gameActualNote][1]]);
+            }
+            if (IsAudioStreamPlaying(stream))
+            {
+                StopAudioStream(stream);
+            }
+            UpdateAudioStream(stream, audio_samples, MAX_SAMPLES);
+            PlayAudioStream(stream);
+
+        }
+        if ((audioTimer / 10 == gameMelody[gameActualNote][0]))
+        {
+            audioTimer = 0;
+            if (gameActualNote == gameMaxNote)
+            {
+                gameInterpretationDone = true;
+                TraceLog(LOG_INFO, "gameInterpretationDone");
+            }
+            else
+            {
+                gameActualNote++;
+            }
+
+
         }
         else
         {
-            generate_square(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][melody[actual_note][1]]);
+            audioTimer++;
         }
-        if (IsAudioStreamPlaying(stream))
+        if (timersGame[gameMelody[gameActualNote][1]] > 0)
         {
-            StopAudioStream(stream);
+            timersGame[gameMelody[gameActualNote][1]] -= 1;
         }
-        UpdateAudioStream(stream, audio_samples, MAX_SAMPLES);
-        PlayAudioStream(stream);
-
     }
-    if ((t / 10 == melody[actual_note][0]))
-    {       
-        actual_note++;
-        t = 0;
-     }
-    else
-    {
-        t++;
-
-    }
-
     
 
     return;
@@ -320,10 +316,10 @@ void play_melody(void)
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
-/* Function: draw_GUI()                                                                 */
+/* Function: drawGUI()                                                                  */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-void draw_GUI(void)
+void drawGUI(void)
 {
     DrawPixel(1, 1, colorGUI);
     DrawLine(1, 2, 10, 2, colorGUI);
@@ -347,7 +343,7 @@ void draw_GUI(void)
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
 
-void detect_user_interaction(void)
+void detectUserInteraction(void)
 {
 
     float scale = min((float)GetScreenWidth() / gameScreenWidth, (float)GetScreenHeight() / gameScreenHeight);
@@ -362,7 +358,10 @@ void detect_user_interaction(void)
         {
             if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             {
-                timers[i] = 10;
+                userDrawingDone = false;
+                timersUser[i] = 10;
+                checkUserFollowingMelody(i);
+
             }
         }
     }
@@ -388,8 +387,9 @@ void detect_user_interaction(void)
 
     if ((x >= 25) && (x <= 28) && (y >= 1) && (y <= 2) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
     {
-        t = 0;
-        actual_note = 0;
+        gameStatus = START;
+        TraceLog(LOG_INFO, "gameStatus = START");
+        
     }
 
     return;
@@ -397,28 +397,76 @@ void detect_user_interaction(void)
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
-/* Function: draw_zones()                                                               */
+/* Function: checkUserFollowingMelody()                                                 */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-void draw_zones(void)
+void checkUserFollowingMelody(int note)
+{
+    bool mistake = false;
+
+    if (gameInterpretationDone == true)
+    {
+        userMelody[userActualNote] = note;
+
+        for (int i = 0; i <= userActualNote; i++)
+        {
+
+            if (userMelody[i] != gameMelody[i][1])
+            {
+                mistake = true;
+                userStatus = USER_FAILED;
+                TraceLog(LOG_INFO, "userStatus = USER_FAILED");
+                userActualNote = 0;
+                memset(userMelody, 0, sizeof(userMelody));
+                gameMaxNote = 0;
+                break;
+            }
+        }
+
+        if (mistake == false)
+        {
+            if (userActualNote == gameActualNote)
+            {
+                userStatus = USER_LEVEL_DONE;
+                TraceLog(LOG_INFO, "userStatus = USER_LEVEL_DONE");
+                userActualNote = 0;
+                memset(userMelody, 0, sizeof(userMelody));
+                gameMaxNote++;
+            }
+            else
+            {
+             userActualNote += 1;
+             userStatus = USER_PLAYING;
+             TraceLog(LOG_INFO, "userStatus = USER_PLAYING");
+            }
+        }
+
+     }
+    return;
+}
+/*--------------------------------------------------------------------------------------*/
+/*                                                                                      */
+/* Function: drawZones()                                                                */
+/*                                                                                      */
+/*--------------------------------------------------------------------------------------*/
+void drawZones(void)
 {
     Color temp;
     for (int i = 0; i < numberZones; i++)
     {
         temp = zColors[i];
 
-        if (timers[i] > 0)
+        if (i == gameMelody[gameActualNote][1])
         {
-            temp = highlightUser(zColors[i], timers[i]);
+            temp = highlightGame(zColors[i], timersGame[i]);
         }
 
-        if (i == melody[actual_note][1])
+        if (timersUser[i] > 0)
         {
-            temp = highlightGame(zColors[i]);
+            temp = highlightUser(zColors[i], timersUser[i]);
         }
 
         DrawRectangle(zones[i].x, zones[i].y, zones[i].width, zones[i].height, temp);
-
 
     }
     return;
@@ -426,29 +474,29 @@ void draw_zones(void)
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
-/* Function: play_user_interaction()                                                    */
+/* Function: playUserInteraction()                                                      */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-void play_user_interaction(void)
+void playUserInteraction(void)
 {
 
     for (int i = 0; i < numberZones; i++)
     {
  
-        if (timers[i] > 0)
+        if (timersUser[i] > 0)
         {
 
-            if (timers[i] == 10)
+            if (timersUser[i] == 10)
             {
                 short audio_samples[MAX_SAMPLES] = { 0 };
 
                 if (selector2 == 0)
                 {
-                    generate_sin(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][i]);
+                    generateSin(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][i]);
                 }
                 else
                 {
-                    generate_square(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][i]);
+                    generateSquare(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][i]);
                 }
                 if (IsAudioStreamPlaying(stream))
                 {
@@ -458,7 +506,11 @@ void play_user_interaction(void)
                 PlayAudioStream(stream);
             }
 
-            timers[i] -= 1;
+            timersUser[i] -= 1;
+            if (timersUser[i]==0)
+            {
+                userDrawingDone = true;
+            }
         }
 
 
@@ -468,7 +520,7 @@ void play_user_interaction(void)
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
-/* Function: highlightUser()                                                           */
+/* Function: highlightUser()                                                            */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
 Color highlightUser(Color input, int i)
@@ -493,13 +545,13 @@ Color highlightUser(Color input, int i)
 /* Function: highlightGame()                                                            */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-Color highlightGame(Color input)
+Color highlightGame(Color input,  int i)
 {
     Color output;
 
-    output.r = 255;
-    output.g = 0;
-    output.b = 0;
+    output.r = i * (255 - input.r) / TIMER_HIGHLIGHT_GAME + input.r;
+    output.g = i * (-1) * input.g / TIMER_HIGHLIGHT_GAME + input.g;
+    output.b = i * (-1) * input.b / TIMER_HIGHLIGHT_GAME + input.b;
     output.a = 255;
 
     return output;
@@ -508,33 +560,10 @@ Color highlightGame(Color input)
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
-/* Function: find_max()                                                                 */
+/* Function: generateSin()                                                              */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-int find_max(int a[], int n)
-{
-    int c, max, index;
-
-    max = a[0];
-    index = 0;
-
-    for (c = 1; c < n; c++) {
-        if (a[c] > max) {
-            index = c;
-            max = a[c];
-        }
-    }
-
-    return max;
-}
-
-
-/*--------------------------------------------------------------------------------------*/
-/*                                                                                      */
-/* Function: generate_sin()                                                             */
-/*                                                                                      */
-/*--------------------------------------------------------------------------------------*/
-void generate_sin(short audio_samples[], int samples_length, int samplerate, float frequency)
+void generateSin(short audio_samples[], int samples_length, int samplerate, float frequency)
 {
     int waveLength = (int)(samplerate / frequency);
     int number_waves = (int)(samples_length / waveLength);
@@ -549,10 +578,10 @@ void generate_sin(short audio_samples[], int samples_length, int samplerate, flo
 }
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
-/* Function: generate_square()                                                          */
+/* Function: generateSquare()                                                           */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-void generate_square(short audio_samples[], int samples_length, int samplerate, float frequency)
+void generateSquare(short audio_samples[], int samples_length, int samplerate, float frequency)
 {
     int waveLength = (int)(samplerate / frequency);
     int number_waves = (int)(samples_length / waveLength);
@@ -572,10 +601,10 @@ void generate_square(short audio_samples[], int samples_length, int samplerate, 
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
-/* Function: generate_hihat()                                                           */
+/* Function: generateNoise()                                                            */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-void generate_hihat(short audio_samples[], int samples_length)
+void generateNoise(short audio_samples[], int samples_length)
 {
  
     for (int i = 0; i < samples_length; i++)
@@ -585,4 +614,67 @@ void generate_hihat(short audio_samples[], int samples_length)
         audio_samples[i] = amplitude * GetRandomValue(0,100);
     }
     return;
+}
+
+/*--------------------------------------------------------------------------------------*/
+/*                                                                                      */
+/* Function: wait()                                                                     */
+/*                                                                                      */
+/*--------------------------------------------------------------------------------------*/
+void wait(int seconds)
+{
+    double a = GetTime();
+    double b = GetTime();
+    while (b < a + seconds)
+    {
+        b = GetTime();
+    }
+    return;
+}
+
+/*--------------------------------------------------------------------------------------*/
+/*                                                                                      */
+/* Function: userStatusFSM()                                                            */
+/*                                                                                      */
+/*--------------------------------------------------------------------------------------*/
+void userStatusFSM(void)
+{
+    switch (userStatus)
+    {
+        case USER_LEVEL_DONE:
+        {
+            if (userDrawingDone == true)
+            {
+                wait(1);
+                audioTimer = 0;
+                gameActualNote = 0;
+                gameInterpretationDone = false;
+                userDrawingDone = false;
+                userStatus = USER_NOT_STARTED;
+                TraceLog(LOG_INFO, "userStatus = USER_NOT_STARTED");
+            }
+
+
+        }
+        break;
+        case USER_FAILED:
+        {
+            if (userDrawingDone == true)
+            {
+                userStatus = USER_NOT_STARTED;
+                gameStatus = LOOSE;
+                TraceLog(LOG_INFO, "gameStatus = LOOSE");
+                TraceLog(LOG_INFO, "userStatus = USER_NOT_STARTED");
+
+            }
+
+
+        }
+        break;
+    }
+
+    
+
+    return;
+
 }
