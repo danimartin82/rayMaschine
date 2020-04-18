@@ -73,18 +73,37 @@ AudioStream stream;
 #define NUMBER_OF_LEVELS 2
 #define MELODY_1_LENGTH 3
 #define MELODY_2_LENGTH 70
+#define MAX_MELODY_LENGTH MELODY_2_LENGTH
 
 int MELODY_1[MELODY_1_LENGTH][2] =
 { {1,3},{1,7},{1,9} };
-
 
 int MELODY_2[MELODY_2_LENGTH][2]={ {1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{3,7},{1,2},{1,2},{1,7},{3,9},{1,2},{1,6},{1,9},{3,10},{1,2},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},
 {1,10},{3,7},{1,2},{1,2},{1,7},{1,9},{1,2},{1,6},{1,12},{1,10},{1,9},{3,7},{1,9},{1,10},{1,12},{3,14},{1,5},{1,15},{1,14},{3,12},{1,3},{1,14},{1,12},{3,10},{1,2},
 {1,12},{1,10},{2,9},{1,7},{1,2},{3,14},{1,14},{3,14},{1,13},{3,14},{1,13},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{4,7} };
 
+
+#define MELODY_START_LENGTH 9
+#define MELODY_WIN_LENGTH 6
+#define MELODY_LOOSE_LENGTH 3
+
+int MELODY_START[MELODY_START_LENGTH][2] =
+{ {1,3},{1,7},{1,10},{1,3},{1,7},{1,10},{1,3},{1,7},{1,10} };
+
+int MELODY_WIN[MELODY_WIN_LENGTH][2] =
+{ {1,0},{1,4},{1,7},{2,12},{1,7},{2,12}};
+
+int MELODY_LOOSE[MELODY_LOOSE_LENGTH][2] =
+{ {3,3},{3,2},{3,1} };
+
+
 int gameMelodyLengths[] = {MELODY_1_LENGTH, MELODY_2_LENGTH};
 
-int gameMelody[70][2] = { 0 };
+int gameMelody[MAX_MELODY_LENGTH][2] = { 0 };
+
+
+
+
 
 int gameLevel = 0;
 
@@ -116,6 +135,11 @@ enum phaseStatus {
     PHASE_DONE,
 }; phaseStatus;
 
+enum genericMelodyStatus {
+    GENERIC_MELODY_START,
+    GENERIC_MELODY_PLAYING,
+    GENERIC_MELODY_STOP
+}genericMelodyStatus;
 
 #define TIMER_HIGHLIGHT_GAME 10
 #define TIMER_HIGHLIGHT_USER 10
@@ -144,6 +168,7 @@ void gameFSM(void);
 void levelFSM(void);
 void detectUserInteraction(void);
 void playUserInteraction(void);
+void playGenericMelody(int melody[][2],int melodyLength);
 void playNote(int note);
 void generateSin(short audio_samples[], int samples_length, int samplerate, float frequency);
 void generateSquare(short audio_samples[], int samples_length, int samplerate, float frequency);
@@ -246,7 +271,6 @@ void initGame(void)
             n++;
         }
     }
-
     gameStatus = GAME_FREE_MODE;
     phaseStatus = PHASE_START;
     TraceLog(LOG_INFO, "gameStatus = GAME_FREE_MODE");
@@ -278,6 +302,7 @@ void gameFSM(void)
             screenTimer++;
             DrawTextEx(GetFontDefault(), "GO!!", (Vector2) { 0, 0 }, 10, 1, colorGUI2);
             DrawTextEx(GetFontDefault(), FormatText("Level%d",gameLevel), (Vector2) { 0, 10 }, 10, 1, colorGUI2);
+            playGenericMelody(MELODY_START,MELODY_START_LENGTH);
 
             if (screenTimer > TIMER_START_SCREEN)
             {
@@ -320,6 +345,8 @@ void gameFSM(void)
             DrawTextEx(GetFontDefault(), "LOOSE", (Vector2) { 0, 0 }, 10, 1, colorGUI2);
             DrawTextEx(GetFontDefault(), "SCORE", (Vector2) { 0, 10 }, 10, 1, colorGUI2);
             DrawTextEx(GetFontDefault(), FormatText("%d", gameMaxNote), (Vector2) { 0, 20 }, 10, 1, colorGUI2);
+            
+            playGenericMelody(MELODY_LOOSE,MELODY_LOOSE_LENGTH);
 
             if (screenTimer > TIMER_LOOSE_SCREEN)
             {
@@ -340,6 +367,8 @@ void gameFSM(void)
             DrawTextEx(GetFontDefault(), "WIN!!", (Vector2) { 0, 0 }, 10, 1, colorGUI);
             DrawTextEx(GetFontDefault(), "SCORE", (Vector2) { 0, 10 }, 10, 1, colorGUI);
             DrawTextEx(GetFontDefault(), FormatText("%d", gameMaxNote + 1), (Vector2) { 0, 20 }, 10, 1, colorGUI);
+            
+            playGenericMelody(MELODY_WIN,MELODY_WIN_LENGTH);
 
             if (screenTimer > TIMER_LOOSE_SCREEN)
             {
@@ -354,8 +383,10 @@ void gameFSM(void)
                 }
                 gameStatus = GAME_FREE_MODE;
                 phaseStatus = PHASE_START;
+                genericMelodyStatus = GENERIC_MELODY_STOP;
                 TraceLog(LOG_INFO, "gameStatus = GAME_FREE_MODE");
                 TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
+                TraceLog(LOG_INFO, "genericMelodyStatus = GENERIC_MELODY_STOP;");
             }
 
         }
@@ -370,8 +401,6 @@ return;
 /*--------------------------------------------------------------------------------------*/
 void levelFSM(void)
 {
-    short audio_samples[MAX_SAMPLES] = { 0 };
-
     switch (phaseStatus)
     {
         case PHASE_START:
@@ -477,17 +506,23 @@ void levelFSM(void)
                         TraceLog(LOG_INFO, FormatText("phaseStatus = PHASE_MELODY_START level up gameMaxNote=%d, gameMelody1Length=%d!!", gameMaxNote, gameMelodyLengths[gameLevel]));
                     }
                     else
-                    {                      
+                    {
+                        genericMelodyStatus = GENERIC_MELODY_START;
+                        phaseStatus = PHASE_START;
                         gameStatus = GAME_WIN_SCREEN;
+                        TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
                         TraceLog(LOG_INFO, "gameStatus = GAME_WIN_SCREEN");
+                        TraceLog(LOG_INFO, "genericMelodyStatus = GENERIC_MELODY_START");
                     }
                 }
                 else
                 {
-                    phaseStatus = PHASE_START;
-                    TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
+                    genericMelodyStatus = GENERIC_MELODY_START;
+                    phaseStatus = PHASE_START;                  
                     gameStatus = GAME_LOOSE_SCREEN;
+                    TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
                     TraceLog(LOG_INFO, "gameStatus = GAME_LOOSE_SCREEN");
+                    TraceLog(LOG_INFO, "genericMelodyStatus = GENERIC_MELODY_START");
                 }
             }
         }
@@ -552,6 +587,7 @@ void detectUserInteraction(void)
 
     if ((x >= 25) && (x <= 28) && (y >= 1) && (y <= 2) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
     {
+        genericMelodyStatus = GENERIC_MELODY_START;
         gameStatus = GAME_START_SCREEN;
         TraceLog(LOG_INFO, "gameStatus = GAME_START_SCREEN");
 
@@ -587,6 +623,59 @@ void playUserInteraction(void)
     return;
 }
 
+/*--------------------------------------------------------------------------------------*/
+/*                                                                                      */
+/* Function: playGenericMelody()                                                        */
+/*                                                                                      */
+/*--------------------------------------------------------------------------------------*/
+void playGenericMelody(int melody[][2], int melodyLength)
+{
+    switch (genericMelodyStatus)
+    {
+    case GENERIC_MELODY_START:
+    {
+        audioTimer = 0;
+        gameActualNote = 0;
+        genericMelodyStatus = GENERIC_MELODY_PLAYING;
+        TraceLog(LOG_INFO, "genericMelodyStatus = GENERIC_MELODY_PLAYING");
+    }
+    break;
+
+    case GENERIC_MELODY_PLAYING:
+    {
+        if (audioTimer == 0)
+        {
+            playNote(melody[gameActualNote][1]);
+        }
+        if ((audioTimer / 10 == melody[gameActualNote][0]))
+        {
+            audioTimer = 0;
+            if (gameActualNote < (melodyLength - 1))
+            {
+                gameActualNote++;
+            }
+            else
+            {
+                genericMelodyStatus = GENERIC_MELODY_STOP;
+                TraceLog(LOG_INFO, "genericMelodyStatus = GENERIC_MELODY_STOP");
+            }
+        }
+        else
+        {
+            audioTimer++;
+        }
+    }
+    break;
+    case GENERIC_MELODY_STOP:
+    {
+
+    }
+    break;
+    }
+
+
+    return;
+}
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
