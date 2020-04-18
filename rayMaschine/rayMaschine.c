@@ -72,7 +72,7 @@ AudioStream stream;
 
 int melodiesLevel1[3][3][2] =
 { {{1, 3},{1, 7},{1, 9}},
-  {{1,16},{1,13},{1,10}},
+  {{1,15},{1,13},{1,10}},
   {{1, 2},{1, 6},{1, 5}}
 };
 
@@ -195,6 +195,14 @@ Color paletteOranges[16]={
     { 253, 165,  15, 255 },
 };
 
+Color paletteLime[6] = {
+    {   0, 119, 41, 255 },
+    {   0, 159, 81, 255 },
+    {  60, 169, 62, 255 },
+    { 141, 195, 45, 255 },
+    { 210, 228, 20, 255 },
+    { 240, 255, 50, 255 },
+};
 /*------------------------------------- Function headers -------------------------------*/
 void initGame(void);
 void gameFSM(void);
@@ -220,7 +228,7 @@ void wait(double seconds);
 /*--------------------------------------------------------------------------------------*/
 int main(void)
 {
-    //SetTraceLogLevel(LOG_WARNING);
+    SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_VSYNC_HINT);
     InitWindow(windowWidth, windowHeight, "RayMaschine");
 
@@ -363,6 +371,9 @@ void gameFSM(void)
                 loadMelodyForLevel();
                 calculateColorZones();
                 screenTimer = 0;
+                userActualNote = 0;
+                gameActualNote = 0;
+                gameMaxNote = 0;
                 gameStatus = GAME_PLAYING;
                 phaseStatus = PHASE_START;
                 TraceLog(LOG_INFO, "gameStatus = GAME_PLAYING");
@@ -391,10 +402,11 @@ void gameFSM(void)
             playGenericMelody(MELODY_USER_LOOSE, 1);
 
             if (screenTimer > TIMER_LOOSE_SCREEN)
-            {
+            {       
                 userTotalScore = 0;
                 screenTimer = 0;
                 gameLevel = 1;
+                calculateColorZones();
                 gameStatus = GAME_FREE_MODE;
                 phaseStatus = PHASE_START;
                 TraceLog(LOG_INFO, "gameStatus = GAME_FREE_MODE");
@@ -707,6 +719,18 @@ void loadMelodyForLevel(void)
         memcpy(&currentMelody[0][0], &melodiesLevel3[song][0][0], currentMelodyLength * 2 * sizeof(int));
     }
     break;
+    default:
+    {
+        selector1 = 0;
+        selector2 = 1;
+        int song = GetRandomValue(0, 2);
+        currentMelodyLength = melodiesLevel1Length[song];
+        memcpy(&currentMelody[0][0], &melodiesLevel1[song][0][0], currentMelodyLength * 2 * sizeof(int));
+
+    }
+    break;
+
+
     }
 return;
 }
@@ -935,8 +959,23 @@ void calculateColorZones(void)
 {
     for (int n = 0; n < numberZones; n++)
     {
-        //zColors[n] = (Color){ GetRandomValue(0, 255),  GetRandomValue(0, 255), GetRandomValue(0, 255), 255 };
-        zColors[n] = paletteOranges[GetRandomValue(0, 15)];    
+        switch (gameLevel)
+        {
+        case 1:
+            zColors[n] = (Color){ GetRandomValue(0, 255),  GetRandomValue(0, 255), GetRandomValue(0, 255), 255 };
+            break;
+        case 2:
+            zColors[n] = paletteOranges[GetRandomValue(0, 15)];
+            break;
+        case 3:
+            zColors[n] = paletteLime[GetRandomValue(0, 5)];
+            break;
+        default:
+            zColors[n] = (Color){ GetRandomValue(0, 255),  GetRandomValue(0, 255), GetRandomValue(0, 255), 255 };
+            break;
+        }
+
+        
     }
     return;
 }
