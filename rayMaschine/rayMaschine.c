@@ -85,7 +85,7 @@ int MELODY_2[MELODY_2_LENGTH][2]={ {1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,1
 
 #define MELODY_START_LENGTH 9
 #define MELODY_WIN_LENGTH 6
-#define MELODY_LOOSE_LENGTH 3
+#define MELODY_LOOSE_LENGTH 4
 
 int MELODY_START[MELODY_START_LENGTH][2] =
 { {1,3},{1,7},{1,10},{1,3},{1,7},{1,10},{1,3},{1,7},{1,10} };
@@ -94,7 +94,7 @@ int MELODY_WIN[MELODY_WIN_LENGTH][2] =
 { {1,0},{1,4},{1,7},{2,12},{1,7},{2,12}};
 
 int MELODY_LOOSE[MELODY_LOOSE_LENGTH][2] =
-{ {3,3},{3,2},{3,1} };
+{ {3,4},{3,3},{3,2},{3,1} };
 
 
 int gameMelodyLengths[] = {MELODY_1_LENGTH, MELODY_2_LENGTH};
@@ -104,7 +104,7 @@ int gameMelody[MAX_MELODY_LENGTH][2] = { 0 };
 
 
 
-
+int userTotalScore = 0;
 int gameLevel = 0;
 
 int userMelody[70] = { 0 };
@@ -119,6 +119,7 @@ bool userDrawingDone = false;
 bool phaseCompleted = false;
 
 enum gameStatus{
+    GAME_WELCOME_SCREEN,
     GAME_FREE_MODE,
     GAME_START_SCREEN,
     GAME_PLAYING,
@@ -160,7 +161,25 @@ Color zColors[numberZones];
 Rectangle zones[numberZones];
 Color colorGUI = { 0, 153, 255, 255 };
 Color colorGUI2 = { 255, 0, 102, 255 };
-
+Color colorSCORE = { 255, 255, 255, 70 };
+Color paletteOranges[16]={
+    { 218, 165,  32, 255 },
+    { 249, 129,  42, 255 },
+    { 139,  64,   0, 255 },
+    { 249, 166,   2, 255 },
+    { 253, 106,   2, 255 },
+    { 216, 128,   0, 255 },
+    { 252, 102,   0, 255 },
+    { 255, 150,   3, 255 },
+    { 121,  56,   2, 255 },
+    { 255, 116,  23, 255 },
+    { 150,  64,   0, 255 },
+    { 239, 114,  21, 255 },
+    { 203,  92,  13, 255 },  
+    { 204, 119,  34, 255 },
+    { 177,  86,  15, 255 },
+    { 253, 165,  15, 255 },
+};
 
 /*------------------------------------- Function headers -------------------------------*/
 void initGame(void);
@@ -168,14 +187,15 @@ void gameFSM(void);
 void levelFSM(void);
 void detectUserInteraction(void);
 void playUserInteraction(void);
-void playGenericMelody(int melody[][2],int melodyLength);
+void playGenericMelody(int melody[][2],int melodyLength,int scale);
 void playNote(int note);
 void generateSin(short audio_samples[], int samples_length, int samplerate, float frequency);
 void generateSquare(short audio_samples[], int samples_length, int samplerate, float frequency);
 void drawGame(void);
 Color highlightUser(Color input, int i);
 Color highlightGame(Color input, int i);
-void wait(int seconds);
+void calculateColorZones(void);
+void wait(double seconds);
 
 
 /*--------------------------------------------------------------------------------------*/
@@ -265,17 +285,19 @@ void initGame(void)
     for (int i = 0; i < zRows; i++)
     {
         for (int j = 0; j < zCols; j++)
-        {
-            zColors[n] = (Color){ GetRandomValue(0, 255),  GetRandomValue(0, 255), GetRandomValue(0, 255), 255 };
+        {;
             zones[n] = (Rectangle){ j * zWidth, i * zHeight + Yoffset, zWidth, zHeight };
             n++;
         }
     }
-    gameStatus = GAME_FREE_MODE;
+    calculateColorZones();
+
+    gameStatus = GAME_WELCOME_SCREEN;
     phaseStatus = PHASE_START;
-    TraceLog(LOG_INFO, "gameStatus = GAME_FREE_MODE");
+    TraceLog(LOG_INFO, "gameStatus = GAME_WELCOME_SCREEN");
     TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
 
+    wait(0.1);
     return;
 }
 
@@ -288,6 +310,22 @@ void gameFSM(void)
 {
     switch (gameStatus)
     {
+    case GAME_WELCOME_SCREEN:
+    {
+        screenTimer++;
+        DrawTextEx(GetFontDefault(), "Ray", (Vector2) { 0, 0 }, 10, 1, colorGUI2);
+        DrawTextEx(GetFontDefault(), "Masc", (Vector2) { 0, 10 }, 10, 1, colorGUI2);
+        DrawTextEx(GetFontDefault(), "hine", (Vector2) { 0, 20 }, 10, 1, colorGUI2);
+        playGenericMelody(MELODY_WIN, MELODY_WIN_LENGTH, 2);
+
+        if (screenTimer > TIMER_START_SCREEN)
+        {    
+            screenTimer = 0;
+            gameStatus = GAME_FREE_MODE;
+            TraceLog(LOG_INFO, "gameStatus = GAME_FREE_MODE");
+        }
+    }
+    break;
         case GAME_FREE_MODE:
         {
             screenTimer = 0;
@@ -301,8 +339,8 @@ void gameFSM(void)
         {
             screenTimer++;
             DrawTextEx(GetFontDefault(), "GO!!", (Vector2) { 0, 0 }, 10, 1, colorGUI2);
-            DrawTextEx(GetFontDefault(), FormatText("Level%d",gameLevel), (Vector2) { 0, 10 }, 10, 1, colorGUI2);
-            playGenericMelody(MELODY_START,MELODY_START_LENGTH);
+            DrawTextEx(GetFontDefault(), FormatText("Level%d",gameLevel+1), (Vector2) { 0, 10 }, 10, 1, colorGUI2);
+            playGenericMelody(MELODY_START,MELODY_START_LENGTH,2);
 
             if (screenTimer > TIMER_START_SCREEN)
             {
@@ -310,16 +348,20 @@ void gameFSM(void)
                 {
                     case 0:
                     {
+                        selector1 = 0;
+                        selector2 = 1;
                         memcpy(&gameMelody[0][0], MELODY_1, gameMelodyLengths[gameLevel] * 2 * sizeof(int));
                     }
                     break;
                     case 1:
                     {
+                        selector1 = 2;
+                        selector2 = 0;
                         memcpy(&gameMelody[0][0], MELODY_2, gameMelodyLengths[gameLevel] * 2 * sizeof(int));
                     }
                     break;
                 }
-                
+                calculateColorZones();
                 screenTimer = 0;
                 gameStatus = GAME_PLAYING;
                 phaseStatus = PHASE_START;
@@ -344,9 +386,9 @@ void gameFSM(void)
 
             DrawTextEx(GetFontDefault(), "LOOSE", (Vector2) { 0, 0 }, 10, 1, colorGUI2);
             DrawTextEx(GetFontDefault(), "SCORE", (Vector2) { 0, 10 }, 10, 1, colorGUI2);
-            DrawTextEx(GetFontDefault(), FormatText("%d", gameMaxNote), (Vector2) { 0, 20 }, 10, 1, colorGUI2);
+            DrawTextEx(GetFontDefault(), FormatText("%d", userTotalScore), (Vector2) { 0, 20 }, 10, 1, colorGUI2);
             
-            playGenericMelody(MELODY_LOOSE,MELODY_LOOSE_LENGTH);
+            playGenericMelody(MELODY_LOOSE,MELODY_LOOSE_LENGTH,1);
 
             if (screenTimer > TIMER_LOOSE_SCREEN)
             {
@@ -366,9 +408,10 @@ void gameFSM(void)
 
             DrawTextEx(GetFontDefault(), "WIN!!", (Vector2) { 0, 0 }, 10, 1, colorGUI);
             DrawTextEx(GetFontDefault(), "SCORE", (Vector2) { 0, 10 }, 10, 1, colorGUI);
-            DrawTextEx(GetFontDefault(), FormatText("%d", gameMaxNote + 1), (Vector2) { 0, 20 }, 10, 1, colorGUI);
+            DrawTextEx(GetFontDefault(), FormatText("%d", userTotalScore), (Vector2) { 0, 20 }, 10, 1, colorGUI);
             
-            playGenericMelody(MELODY_WIN,MELODY_WIN_LENGTH);
+
+            playGenericMelody(MELODY_WIN,MELODY_WIN_LENGTH,2);
 
             if (screenTimer > TIMER_LOOSE_SCREEN)
             {
@@ -510,6 +553,7 @@ void levelFSM(void)
                         genericMelodyStatus = GENERIC_MELODY_START;
                         phaseStatus = PHASE_START;
                         gameStatus = GAME_WIN_SCREEN;
+                        userTotalScore = userTotalScore + gameMaxNote + 1;
                         TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
                         TraceLog(LOG_INFO, "gameStatus = GAME_WIN_SCREEN");
                         TraceLog(LOG_INFO, "genericMelodyStatus = GENERIC_MELODY_START");
@@ -520,6 +564,7 @@ void levelFSM(void)
                     genericMelodyStatus = GENERIC_MELODY_START;
                     phaseStatus = PHASE_START;                  
                     gameStatus = GAME_LOOSE_SCREEN;
+                    userTotalScore = userTotalScore + gameMaxNote + 1;
                     TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
                     TraceLog(LOG_INFO, "gameStatus = GAME_LOOSE_SCREEN");
                     TraceLog(LOG_INFO, "genericMelodyStatus = GENERIC_MELODY_START");
@@ -628,12 +673,15 @@ void playUserInteraction(void)
 /* Function: playGenericMelody()                                                        */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-void playGenericMelody(int melody[][2], int melodyLength)
+void playGenericMelody(int melody[][2], int melodyLength,int scale)
 {
     switch (genericMelodyStatus)
     {
     case GENERIC_MELODY_START:
     {
+        selector1 = scale;
+        selector2 = 1;
+
         audioTimer = 0;
         gameActualNote = 0;
         genericMelodyStatus = GENERIC_MELODY_PLAYING;
@@ -715,7 +763,7 @@ void generateSin(short audio_samples[], int samples_length, int samplerate, floa
     int number_waves = (int)(samples_length / waveLength);
     for (int i = 0; i < waveLength * number_waves; i++)
     {
-        int amplitude = 32000 - 8 * i;
+        int amplitude = 32000 -2 * i;
 
         audio_samples[i] = (short)(sinf(((2 * PI * (float)i / waveLength))) * amplitude);
 
@@ -766,12 +814,26 @@ void drawGame(void)
         }
 
         if (timersUser[i] > 0)
-        {
+        {       
             temp = highlightUser(zColors[i], timersUser[i]);
         }
 
         DrawRectangle(zones[i].x, zones[i].y, zones[i].width, zones[i].height, temp);
 
+    }
+
+    if (gameStatus == GAME_PLAYING)
+    {
+        int pos_x = 0;
+        if (gameMaxNote < 10)
+        {
+            pos_x = zones[1].x;
+        }
+        else
+        {
+            pos_x = zones[1].x;
+        }
+        DrawTextEx(GetFontDefault(), FormatText("%d", gameMaxNote), (Vector2) { pos_x, zones[0].y }, 30, 0,colorSCORE);
     }
 
     // GUI
@@ -823,31 +885,43 @@ Color highlightGame(Color input,  int i)
 {
     Color output;
 
-    output.r = i * (255 - input.r) / TIMER_HIGHLIGHT_GAME + input.r;
-    output.g = i * (-1) * input.g / TIMER_HIGHLIGHT_GAME + input.g;
-    output.b = i * (-1) * input.b / TIMER_HIGHLIGHT_GAME + input.b;
+    output.r = i * (colorGUI2.r - input.r) / TIMER_HIGHLIGHT_GAME + input.r;
+    output.g = i * (colorGUI2.g - input.g) / TIMER_HIGHLIGHT_GAME + input.g;
+    output.b = i * (colorGUI2.b - input.b) / TIMER_HIGHLIGHT_GAME + input.b;
     output.a = 255;
 
     return output;
 }
 
+/*--------------------------------------------------------------------------------------*/
+/*                                                                                      */
+/* Function: calculateColorZones()                                                      */
+/*                                                                                      */
+/*--------------------------------------------------------------------------------------*/
+void calculateColorZones(void)
+{
+    for (int n = 0; n < numberZones; n++)
+    {
+        //zColors[n] = (Color){ GetRandomValue(0, 255),  GetRandomValue(0, 255), GetRandomValue(0, 255), 255 };
+        zColors[n] = paletteOranges[GetRandomValue(0, 15)];    
+    }
+    return;
+}
 
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
 /* Function: wait()                                                                     */
 /*                                                                                      */
 /*--------------------------------------------------------------------------------------*/
-void wait(int seconds)
+void wait(double seconds)
 {
     double a = GetTime();
     double b = GetTime();
  
-    TraceLog(LOG_INFO, FormatText("Wait %d [s]",seconds));
+    TraceLog(LOG_INFO, FormatText("Wait %f [s]",seconds));
     while (b < a + seconds)
     {
         b = GetTime();
     }
-
-
     return;
 }
