@@ -70,17 +70,25 @@ float frequencies[4][16] =
 int samplerate = 22050;
 AudioStream stream;
 
-#define NUMBER_OF_LEVELS 2
+#define NUMBER_OF_LEVELS 3
 #define MELODY_1_LENGTH 3
-#define MELODY_2_LENGTH 70
+#define MELODY_2_LENGTH 9
+#define MELODY_3_LENGTH 9
 #define MAX_MELODY_LENGTH MELODY_2_LENGTH
 
 int MELODY_1[MELODY_1_LENGTH][2] =
 { {1,3},{1,7},{1,9} };
 
-int MELODY_2[MELODY_2_LENGTH][2]={ {1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{3,7},{1,2},{1,2},{1,7},{3,9},{1,2},{1,6},{1,9},{3,10},{1,2},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},
+int MELODY_2[MELODY_2_LENGTH][2] =
+{ {3,7},{1,7},{2,10},{2,7},{2,5},{4,3},{2,2}};
+
+int MELODY_3[MELODY_3_LENGTH][2]={ {1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{3,7}};
+/*
+#define MELODY_3_LENGTH 70
+int MELODY_3[MELODY_3_LENGTH][2] = { {1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{3,7},{1,2},{1,2},{1,7},{3,9},{1,2},{1,6},{1,9},{3,10},{1,2},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},
 {1,10},{3,7},{1,2},{1,2},{1,7},{1,9},{1,2},{1,6},{1,12},{1,10},{1,9},{3,7},{1,9},{1,10},{1,12},{3,14},{1,5},{1,15},{1,14},{3,12},{1,3},{1,14},{1,12},{3,10},{1,2},
 {1,12},{1,10},{2,9},{1,7},{1,2},{3,14},{1,14},{3,14},{1,13},{3,14},{1,13},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{4,7} };
+*/
 
 
 #define MELODY_START_LENGTH 9
@@ -97,7 +105,7 @@ int MELODY_LOOSE[MELODY_LOOSE_LENGTH][2] =
 { {3,4},{3,3},{3,2},{3,1} };
 
 
-int gameMelodyLengths[] = {MELODY_1_LENGTH, MELODY_2_LENGTH};
+int gameMelodyLengths[NUMBER_OF_LEVELS] = {MELODY_1_LENGTH, MELODY_2_LENGTH, MELODY_3_LENGTH};
 
 int gameMelody[MAX_MELODY_LENGTH][2] = { 0 };
 
@@ -187,6 +195,7 @@ void gameFSM(void);
 void levelFSM(void);
 void detectUserInteraction(void);
 void playUserInteraction(void);
+void loadMelodyForLevel(void);
 void playGenericMelody(int melody[][2],int melodyLength,int scale);
 void playNote(int note);
 void generateSin(short audio_samples[], int samples_length, int samplerate, float frequency);
@@ -344,23 +353,7 @@ void gameFSM(void)
 
             if (screenTimer > TIMER_START_SCREEN)
             {
-                switch (gameLevel)
-                {
-                    case 0:
-                    {
-                        selector1 = 0;
-                        selector2 = 1;
-                        memcpy(&gameMelody[0][0], MELODY_1, gameMelodyLengths[gameLevel] * 2 * sizeof(int));
-                    }
-                    break;
-                    case 1:
-                    {
-                        selector1 = 2;
-                        selector2 = 0;
-                        memcpy(&gameMelody[0][0], MELODY_2, gameMelodyLengths[gameLevel] * 2 * sizeof(int));
-                    }
-                    break;
-                }
+                loadMelodyForLevel();
                 calculateColorZones();
                 screenTimer = 0;
                 gameStatus = GAME_PLAYING;
@@ -392,6 +385,7 @@ void gameFSM(void)
 
             if (screenTimer > TIMER_LOOSE_SCREEN)
             {
+                userTotalScore = 0;
                 screenTimer = 0;
                 gameStatus = GAME_FREE_MODE;
                 phaseStatus = PHASE_START;
@@ -553,7 +547,7 @@ void levelFSM(void)
                         genericMelodyStatus = GENERIC_MELODY_START;
                         phaseStatus = PHASE_START;
                         gameStatus = GAME_WIN_SCREEN;
-                        userTotalScore = userTotalScore + gameMaxNote + 1;
+                        userTotalScore = userTotalScore + gameMaxNote+1;
                         TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
                         TraceLog(LOG_INFO, "gameStatus = GAME_WIN_SCREEN");
                         TraceLog(LOG_INFO, "genericMelodyStatus = GENERIC_MELODY_START");
@@ -564,7 +558,7 @@ void levelFSM(void)
                     genericMelodyStatus = GENERIC_MELODY_START;
                     phaseStatus = PHASE_START;                  
                     gameStatus = GAME_LOOSE_SCREEN;
-                    userTotalScore = userTotalScore + gameMaxNote + 1;
+                    userTotalScore = userTotalScore + gameMaxNote;
                     TraceLog(LOG_INFO, "phaseStatus = PHASE_START");
                     TraceLog(LOG_INFO, "gameStatus = GAME_LOOSE_SCREEN");
                     TraceLog(LOG_INFO, "genericMelodyStatus = GENERIC_MELODY_START");
@@ -667,7 +661,39 @@ void playUserInteraction(void)
     }
     return;
 }
-
+/*--------------------------------------------------------------------------------------*/
+/*                                                                                      */
+/* Function: loadMelodyForLevel()                                                       */
+/*                                                                                      */
+/*--------------------------------------------------------------------------------------*/
+void loadMelodyForLevel(void)
+{
+    switch (gameLevel)
+    {
+    case 0:
+    {
+        selector1 = 0;
+        selector2 = 1;
+        memcpy(&gameMelody[0][0], MELODY_1, gameMelodyLengths[gameLevel] * 2 * sizeof(int));
+    }
+    break;
+    case 1:
+    {
+        selector1 = 0;
+        selector2 = 1;
+        memcpy(&gameMelody[0][0], MELODY_2, gameMelodyLengths[gameLevel] * 2 * sizeof(int));
+    }
+    break;
+    case 3:
+    {
+        selector1 = 2;
+        selector2 = 0;
+        memcpy(&gameMelody[0][0], MELODY_3, gameMelodyLengths[gameLevel] * 2 * sizeof(int));
+    }
+    break;
+    }
+return;
+}
 /*--------------------------------------------------------------------------------------*/
 /*                                                                                      */
 /* Function: playGenericMelody()                                                        */
@@ -824,16 +850,7 @@ void drawGame(void)
 
     if (gameStatus == GAME_PLAYING)
     {
-        int pos_x = 0;
-        if (gameMaxNote < 10)
-        {
-            pos_x = zones[1].x;
-        }
-        else
-        {
-            pos_x = zones[1].x;
-        }
-        DrawTextEx(GetFontDefault(), FormatText("%d", gameMaxNote), (Vector2) { pos_x, zones[0].y }, 30, 0,colorSCORE);
+        DrawTextEx(GetFontDefault(), FormatText("%d", gameMaxNote+1), (Vector2) { zones[1].x, zones[0].y }, 30, 0,colorSCORE);
     }
 
     // GUI
