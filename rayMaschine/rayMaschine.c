@@ -88,18 +88,13 @@ int melodiesLevel2Length[] = {7, 9, 7};
 
 
 int melodiesLevel3[3][28][2] =
-{ {{1, 3},{1, 3},{2, 3},{1, 3},{2, 5},{2, 0},{3, 3},{2, 3},{1, 8},{3, 10},{1,12},{1,12},{4,12},{1,10},{2,10},{1, 8},{4, 8},{1, 3},{1,12},{3,12},{2,13},{1,12},{2,12},{4,10},{1,12},{1,10},{2,10},{4, 8}}, // Let it be
-  {{1, 3},{1, 3},{2, 3},{1, 3},{2, 5},{2, 0},{3, 3},{2, 3},{1, 8},{3, 10},{1,12},{1,12},{4,12},{1,10},{2,10},{1, 8},{4, 8},{1, 3},{1,12},{3,12},{2,13},{1,12},{2,12},{4,10},{1,12},{1,10},{2,10},{4, 8}},
-  {{1, 3},{1, 3},{2, 3},{1, 3},{2, 5},{2, 0},{3, 3},{2, 3},{1, 8},{3, 10},{1,12},{1,12},{4,12},{1,10},{2,10},{1, 8},{4, 8},{1, 3},{1,12},{3,12},{2,13},{1,12},{2,12},{4,10},{1,12},{1,10},{2,10},{4, 8}}
+{ {{1, 3},{1, 3},{2, 3},{1, 3},{2, 5},{2, 0},{3, 3},{2, 3},{1, 8},{3,10},{1,12},{1,12},{4,12},{1,10},{2,10},{1, 8},{4, 8},{1, 3},{1,12},{3,12},{2,13},{1,12},{2,12},{4,10},{1,12},{1,10},{2,10},{4, 8}}, // Let it be
+  {{2, 4},{2, 9},{2,12},{2,11},{2, 9},{2,12},{2, 9},{2,11},{4, 9},{1, 5},{1, 7},{10,4},{2, 4},{2, 9},{2,12},{2,11},{2, 9},{2,12},{2, 9},{2,11},{4, 9},{1, 4},{1, 3},{10,2},{2, 2},{2, 5},{2, 7},{4,10}}, // Godfather
+  {{4, 1},{4, 6},{4, 8},{1, 9},{1,11},{4, 9},{4, 1},{2, 1},{6, 6},{2, 8},{2, 9},{2, 1},{1, 9},{2, 6},{1,13},{4,11},{4,1},{4, 6},{2, 8},{3, 9},{1, 1},{3,13},{1, 9},{4, 6},{0, 0},{0, 0},{0, 0},{0, 0}}  // The force theme
 };
 
-int melodiesLevel3Length[] = {28, 28, 28};
-/*
-#define MELODY_3_LENGTH 70
-int MELODY_3[MELODY_3_LENGTH][2] = { {1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{3,7},{1,2},{1,2},{1,7},{3,9},{1,2},{1,6},{1,9},{3,10},{1,2},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},
-{1,10},{3,7},{1,2},{1,2},{1,7},{1,9},{1,2},{1,6},{1,12},{1,10},{1,9},{3,7},{1,9},{1,10},{1,12},{3,14},{1,5},{1,15},{1,14},{3,12},{1,3},{1,14},{1,12},{3,10},{1,2},
-{1,12},{1,10},{2,9},{1,7},{1,2},{3,14},{1,14},{3,14},{1,13},{3,14},{1,13},{1,14},{1,13},{1,14},{1,13},{1,14},{1,9},{1,12},{1,10},{4,7} };
-*/
+//int melodiesLevel3Length[] = {28, 28, 24};
+int melodiesLevel3Length[] = { 20, 20, 20 };
 
 #define NUMBER_OF_LEVELS 3
 
@@ -120,12 +115,13 @@ int currentMelody[70][2] = { 0 };
 int currentMelodyLength = 0;
 int userMelody[70] = { 0 };
 
+int noteDuration = 7;
+
 int audioTimer = 0;
 int screenTimer = 0;
 int gameActualNote = 100;
 int gameMaxNote = 0;
 int userActualNote = 0;
-
 int userTotalScore = 0;
 int gameLevel = 1;
 
@@ -156,8 +152,8 @@ enum genericMelodyStatus {
     GENERIC_MELODY_STOP
 }genericMelodyStatus;
 
-#define TIMER_HIGHLIGHT_GAME 20
-#define TIMER_HIGHLIGHT_USER 20
+int timerHighlighGame = 20;
+int timerHighlighUser = 20;
 #define TIMER_START_SCREEN   120
 #define TIMER_LOOSE_SCREEN   120
 
@@ -213,6 +209,7 @@ void loadMelodyForLevel(void);
 void playGenericMelody(int melody, int scale);
 void playNote(int note);
 void generateSin(short audio_samples[], int samples_length, int samplerate, float frequency);
+void generateMultiSin(short audio_samples[], int samples_length, int samplerate, float frequency);
 void generateSquare(short audio_samples[], int samples_length, int samplerate, float frequency);
 void drawGame(void);
 Color highlightUser(Color input, int i);
@@ -228,7 +225,7 @@ void wait(double seconds);
 /*--------------------------------------------------------------------------------------*/
 int main(void)
 {
-    SetTraceLogLevel(LOG_WARNING);
+    //SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_VSYNC_HINT);
     InitWindow(windowWidth, windowHeight, "RayMaschine");
 
@@ -436,6 +433,10 @@ void gameFSM(void)
                 }
                 else
                 {
+                    timerHighlighGame = 10;
+                    timerHighlighUser = 10;
+                    noteDuration = noteDuration-3;
+                    if(noteDuration <3) noteDuration=3;
                     gameLevel = 1;
                 }
                 gameStatus = GAME_START_SCREEN;
@@ -481,10 +482,10 @@ void levelFSM(void)
 
             if (audioTimer == 0)
             {
-                timersGame[currentMelody[gameActualNote][1]] = TIMER_HIGHLIGHT_GAME;
+                timersGame[currentMelody[gameActualNote][1]] = timerHighlighGame;
                 playNote(currentMelody[gameActualNote][1]);
             }
-            if ((audioTimer / 10 == currentMelody[gameActualNote][0]))
+            if ((audioTimer / noteDuration == currentMelody[gameActualNote][0]))
             {
                 audioTimer = 0;
                 if (gameActualNote == gameMaxNote)
@@ -609,7 +610,7 @@ void detectUserInteraction(void)
             if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             {
                 userDrawingDone = false;
-                timersUser[i] = TIMER_HIGHLIGHT_USER;
+                timersUser[i] = timerHighlighUser;
 
                 if (phaseStatus == PHASE_USER_PLAYING)
                 {
@@ -633,7 +634,7 @@ void detectUserInteraction(void)
     {
         selector2++;
 
-        if (selector2 == 2)
+        if (selector2 == 3)
         {
             selector2 = 0;
         }
@@ -663,7 +664,7 @@ void playUserInteraction(void)
     {
         if (timersUser[i] > 0)
         {
-            if (timersUser[i] == TIMER_HIGHLIGHT_USER)
+            if (timersUser[i] == timerHighlighUser)
             {
                 playNote(i);
             }
@@ -693,8 +694,8 @@ void loadMelodyForLevel(void)
     {
     case 1:
     {
-        selector1 = 0;
-        selector2 = 1;
+        selector1 = 1;
+        selector2 = 2;
         int song = GetRandomValue(0, 2);
         currentMelodyLength = melodiesLevel1Length[song];
         memcpy(&currentMelody[0][0],&melodiesLevel1[song][0][0], currentMelodyLength * 2 * sizeof(int));
@@ -717,6 +718,7 @@ void loadMelodyForLevel(void)
         int song = GetRandomValue(0, 2);
         currentMelodyLength = melodiesLevel3Length[song];
         memcpy(&currentMelody[0][0], &melodiesLevel3[song][0][0], currentMelodyLength * 2 * sizeof(int));
+
     }
     break;
     default:
@@ -800,14 +802,26 @@ void playNote(int note)
 {
     short audio_samples[MAX_SAMPLES] = { 0 };
 
-    if (selector2 == 0)
+    switch(selector2)
+    {
+    case 0:
     {
         generateSin(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][note]);
     }
-    else
+    break;
+
+    case 1:
     {
         generateSquare(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][note]);
     }
+    break;
+    case 2:
+    {
+        generateMultiSin(audio_samples, MAX_SAMPLES, samplerate, frequencies[selector1][note]);
+    }
+    break;
+    }
+
     if (IsAudioStreamPlaying(stream))
     {
         StopAudioStream(stream);
@@ -833,6 +847,52 @@ void generateSin(short audio_samples[], int samples_length, int samplerate, floa
 
         audio_samples[i] = (short)(sinf(((2 * PI * (float)i / waveLength))) * amplitude);
 
+    }
+    return;
+}
+
+
+/*--------------------------------------------------------------------------------------*/
+/*                                                                                      */
+/* Function: generateMultiSin()                                                         */
+/*                                                                                      */
+/*--------------------------------------------------------------------------------------*/
+void generateMultiSin(short audio_samples[], int samples_length, int samplerate, float frequency)
+{
+    int waveLength = (int)(samplerate / frequency);
+    int number_waves = (int)(samples_length / waveLength);
+    int amplitude = 0;
+    int max=waveLength * number_waves - 100;
+    int aux = (int)(max / 100);
+
+    for (int i = 0; i < waveLength * number_waves; i++)
+    {
+        if (i < max)
+        {
+            amplitude = 5 * i;
+        }
+        else
+        {
+            /*
+            m=(y2-y1)/(x2-x1)
+            y2=0
+            y1= 5 * max
+            x2= waveLength * number_waves
+            x1= max
+            m=-5 * max/100
+            y=m*x+b
+            5 * max=- 5 * max^2/100 +b
+            b = 5*max + 5 * max^2/100
+            amplitude=  5*max + 5 * max^2/100 (-5 * max/100)*i
+            */ 
+            amplitude = 5 * max + 5 * max * aux - (5 * aux) * i;
+        }
+
+        audio_samples[i] = (short)(sinf(((2 * PI * (float)i / waveLength))) * amplitude);
+        audio_samples[i] += (short)(sinf(((2 * PI * 4 * (float)i / waveLength))) * amplitude/4);
+        audio_samples[i] += (short)(sinf(((2 * PI * 8 * (float)i / waveLength))) * amplitude/4);
+        audio_samples[i] += (short)(sinf(((2 * PI * 16 * (float)i / waveLength))) * amplitude / 8);
+      // TraceLog(LOG_INFO, FormatText("%d", audio_samples[i]));
     }
     return;
 }
@@ -899,7 +959,7 @@ void drawGame(void)
     DrawLine(2 + 2 * selector1, 1, 4 + 2 * selector1, 1, colorGUI2);
 
     DrawPixel(12, 1, colorGUI);
-    DrawLine(12, 2, 17, 2, colorGUI);
+    DrawLine(12, 2, 19, 2, colorGUI);
     DrawLine(13 + 2 * selector2, 1, 15 + 2 * selector2, 1, colorGUI2);
 
     DrawPixel(25, 1, colorGUI);
@@ -942,9 +1002,9 @@ Color highlightGame(Color input,  int i)
 {
     Color output;
 
-    output.r = i * (colorGUI2.r - input.r) / TIMER_HIGHLIGHT_GAME + input.r;
-    output.g = i * (colorGUI2.g - input.g) / TIMER_HIGHLIGHT_GAME + input.g;
-    output.b = i * (colorGUI2.b - input.b) / TIMER_HIGHLIGHT_GAME + input.b;
+    output.r = i * (colorGUI2.r - input.r) / timerHighlighGame + input.r;
+    output.g = i * (colorGUI2.g - input.g) / timerHighlighGame + input.g;
+    output.b = i * (colorGUI2.b - input.b) / timerHighlighGame + input.b;
     output.a = 255;
 
     return output;
